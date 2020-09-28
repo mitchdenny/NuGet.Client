@@ -19,7 +19,7 @@ using NuGet.Versioning;
 using NuGet.VisualStudio;
 using Xunit;
 
-namespace NuGet.PackageManagement.UI.Test.UserInterfaceService
+namespace NuGet.PackageManagement.UI.Test
 {
     public class NuGetUIContextTests : IDisposable
     {
