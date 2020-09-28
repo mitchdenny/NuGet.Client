@@ -9,6 +9,7 @@ using System.Reflection;
 using NuGet.Commands;
 using NuGet.Frameworks;
 using NuGet.Packaging;
+using NuGet.Packaging.Core;
 using NuGet.Test.Utility;
 using Xunit;
 
@@ -61,6 +62,228 @@ namespace NuGet.Build.Tasks.Pack.Test
                     Assert.NotNull(centralTransitiveDependentPackage);
                     Assert.Equal(new List<string> { "Analyzers", "Build", "Runtime" }, centralTransitiveDependentPackage.Exclude);
                 }
+            }
+        }
+
+        [Fact]
+        public void PackTaskLogic_WhenUsingAssetsFile_WarnsMissingDot()
+        {
+            // Arrange
+            using (var testDir = TestDirectory.Create())
+            {
+                var tc = new TestContext(testDir, "net50-windows");
+
+                var assetsJson = @"{
+                    ""version"": 3,
+  ""targets"": {
+    ""net5.0"": {},
+    ""net5.0-windows7.0"": {}
+  },
+  ""libraries"": {},
+  ""projectFileDependencyGroups"": {
+    ""net5.0"": [],
+    ""net5.0-windows7.0"": []
+  },
+  ""project"": {
+    ""version"": ""0.0.0"",
+    ""restore"": {
+      ""projectName"": ""bar"",
+      ""projectStyle"": ""PackageReference"",
+      ""crossTargeting"": true,
+      ""fallbackFolders"": [
+        ""C:\\Microsoft\\Xamarin\\NuGet\\""
+      ],
+      ""originalTargetFrameworks"": [
+        ""net5.0"",
+        ""net50-windows""
+      ],
+      ""sources"": {
+        ""https://api.nuget.org/v3/index.json"": {},
+      },
+      ""frameworks"": {
+        ""net5.0"": {
+          ""targetAlias"": ""net50"",
+          ""projectReferences"": {}
+        },
+        ""net5.0-windows7.0"": {
+          ""targetAlias"": ""net50-windows"",
+          ""projectReferences"": {}
+        }
+      },
+      ""warningProperties"": {
+        ""warnAsError"": [
+          ""NU1605""
+        ]
+      }
+    },
+    ""frameworks"": {
+      ""net5.0"": {
+        ""targetAlias"": ""net50"",
+        ""imports"": [
+          ""net461"",
+          ""net462"",
+          ""net47"",
+          ""net471"",
+          ""net472"",
+          ""net48""
+        ],
+        ""assetTargetFallback"": true,
+        ""warn"": true,
+        ""frameworkReferences"": {
+          ""Microsoft.NETCore.App"": {
+            ""privateAssets"": ""all""
+          }
+        },
+      },
+      ""net5.0-windows7.0"": {
+        ""targetAlias"": ""net50-windows"",
+        ""imports"": [
+          ""net461"",
+          ""net462"",
+          ""net47"",
+          ""net471"",
+          ""net472"",
+          ""net48""
+        ],
+        ""assetTargetFallback"": true,
+        ""warn"": true,
+        ""frameworkReferences"": {
+          ""Microsoft.NETCore.App"": {
+            ""privateAssets"": ""all""
+          }
+        },
+      }
+    }
+  }
+                }";
+                File.WriteAllText(Path.Combine(testDir, "obj", "project.assets.json"), assetsJson);
+
+                tc.Request.PackageFiles = new MSBuildItem[] {
+                    tc.AddContentToProject("", "abc.txt", "hello world", new Dictionary<string, string>()
+                    {
+                        {"BuildAction", "Content"}
+                    }),
+                    tc.AddContentToProject("", "def.txt", "hello world", new Dictionary<string, string>()
+                    {
+                        {"BuildAction", "None"},
+                        {"Pack", "true" },
+                        {"PackagePath", "content\\net50-windows" }
+                    })
+                };
+                tc.Request.ContentTargetFolders = new string[] { "content", "contentFiles" };
+
+                // Act
+                tc.BuildPackage();
+
+                // Assert
+                var logger = (TestLogger)tc.Request.Logger;
+                var messages = logger.WarningMessages.ToArray();
+                Assert.True(messages[0].Contains("net50"));
+                Assert.True(messages[0].Contains("missing dot"));
+                Assert.True(messages[1].Contains("net50-windows"));
+                Assert.True(messages[1].Contains("missing dot"));
+            }
+        }
+
+        [Fact]
+        public void PackTaskLogic_WarnsMissingDot_UsingNuspec()
+        {
+            // Arrange
+            using (var testDir = TestDirectory.Create())
+            {
+                // Arrange
+                string nuspec = @"<?xml version=""1.0"" encoding=""utf-8""?>
+<package >
+  <metadata>
+    <id>bar</id>
+    <version>0.0.0</version>
+    <title>bartitle</title>
+    <authors>kat</authors>
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
+    <license type=""expression"">MIT</license>
+    <description>desc</description>
+    <releaseNotes>release notes</releaseNotes>
+    <copyright>msft</copyright>
+    <tags>foo bar</tags>
+    <dependencies>
+        <group targetFramework=""net50"">
+            <dependency id=""Newtonsoft.Json"" version=""12.0.3""/>
+        </group>
+    </dependencies>
+  </metadata>
+</package>";
+                string nuspecPath = Path.Combine(testDir, "bar.nuspec");
+                File.WriteAllText(nuspecPath, nuspec);
+
+                var tc = new TestContext(testDir);
+                tc.Request.NuspecFile = nuspecPath;
+                tc.Request.NuspecBasePath = testDir;
+
+                var net50WinDllDir = Path.Combine(testDir, "lib", "net50");
+                var net50WinDllPath = Path.Combine(net50WinDllDir, "a.dll");
+
+                Directory.CreateDirectory(net50WinDllDir);
+                File.WriteAllBytes(net50WinDllPath, new byte[0]);
+
+                // Act
+                tc.BuildPackage();
+
+                // Assert
+                var logger = (TestLogger)tc.Request.Logger;
+                var messages = logger.WarningMessages.ToArray();
+                Assert.True(messages[0].Contains("net50"));
+                Assert.True(messages[0].Contains("include dots"));
+            }
+        }
+
+        [Fact]
+        public void PackTaskLogic_WhenDotInPlatformOnly_WarnsMissingDot_UsingNuspec()
+        {
+            // Arrange
+            using (var testDir = TestDirectory.Create())
+            {
+                // Arrange
+                string nuspec = @"<?xml version=""1.0"" encoding=""utf-8""?>
+<package >
+  <metadata>
+    <id>bar</id>
+    <version>0.0.0</version>
+    <title>bartitle</title>
+    <authors>kat</authors>
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
+    <license type=""expression"">MIT</license>
+    <description>desc</description>
+    <releaseNotes>release notes</releaseNotes>
+    <copyright>msft</copyright>
+    <tags>foo bar</tags>
+    <dependencies>
+        <group targetFramework=""net50-windows7.0"">
+            <dependency id=""Newtonsoft.Json"" version=""12.0.3""/>
+        </group>
+    </dependencies>
+  </metadata>
+</package>";
+                string nuspecPath = Path.Combine(testDir, "bar.nuspec");
+                File.WriteAllText(nuspecPath, nuspec);
+
+                var tc = new TestContext(testDir);
+                tc.Request.NuspecFile = nuspecPath;
+                tc.Request.NuspecBasePath = testDir;
+
+                var net50WinDllDir = Path.Combine(testDir, "lib", "net50-windows7.0");
+                var net50WinDllPath = Path.Combine(net50WinDllDir, "a.dll");
+
+                Directory.CreateDirectory(net50WinDllDir);
+                File.WriteAllBytes(net50WinDllPath, new byte[0]);
+
+                // Act
+                tc.BuildPackage();
+
+                // Assert
+                var logger = (TestLogger)tc.Request.Logger;
+                var messages = logger.WarningMessages.ToArray();
+                Assert.True(messages[0].Contains("net50-windows7.0"));
+                Assert.True(messages[0].Contains("include dots"));
             }
         }
 

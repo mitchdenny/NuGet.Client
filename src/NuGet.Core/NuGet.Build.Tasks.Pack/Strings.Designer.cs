@@ -179,6 +179,15 @@ namespace NuGet.Build.Tasks.Pack {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to {0}: Dots in TargetFramework versions are required. The missing dot in &apos;{1}&apos; might cause future problems..
+        /// </summary>
+        internal static string MissingRequiredDot {
+            get {
+                return ResourceManager.GetString("MissingRequiredDot", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to No project was provided to the PackTask..
         /// </summary>
         internal static string NoPackItemProvided {

@@ -1,6 +1,7 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System.Collections.Generic;
 namespace NuGet.Packaging
 {
     public static class PackagingConstants
@@ -43,6 +44,17 @@ namespace NuGet.Packaging
                 Ref,
                 Analyzers,
                 Source
+            };
+
+            internal static IReadOnlyList<string> SupportFrameworks { get; } = new string[] {
+                Build,
+                BuildCrossTargeting,
+                BuildTransitive,
+                Tools,
+                ContentFiles,
+                Lib,
+                Runtimes,
+                Ref,
             };
         }
 

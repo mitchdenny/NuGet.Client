@@ -57,9 +57,40 @@ namespace NuGet.Build.Tasks.Pack
 
             LockFile assetsFile = GetAssetsFile(request);
             var aliases = new Dictionary<string, string>();
-            foreach (var tfm in assetsFile.PackageSpec.TargetFrameworks)
+            foreach (var targetFramework in assetsFile.PackageSpec.TargetFrameworks)
             {
-                aliases[tfm.TargetAlias] = tfm.FrameworkName.GetShortFolderName();
+                string alias = targetFramework.TargetAlias;
+                NuGetFramework framework = targetFramework.FrameworkName;
+                aliases[alias] = framework.GetShortFolderName();
+
+                var isNet5EraTfm = framework.Version.Major >= 5 && StringComparer.OrdinalIgnoreCase.Equals(FrameworkConstants.FrameworkIdentifiers.NetCoreApp, framework.Framework);
+                if (isNet5EraTfm)
+                {
+                    try
+                    {
+                        var parsedAlias = NuGetFramework.Parse(alias);
+                        if (
+                            parsedAlias.Framework == framework.Framework &&
+                            parsedAlias.Version == framework.Version &&
+                            parsedAlias.Platform == framework.Platform)
+                        {
+                            // The alias looks a lot like a real net5.0+ TFM, so we're going to check that it has dots where it needs to.
+                            var dotIndex = alias.IndexOf('.');
+                            var dashIndex = alias.IndexOf('-');
+                            var frameworkVersionHasDot = (dashIndex > -1 && dotIndex > -1 && dotIndex < dashIndex) || (dashIndex == -1 && dotIndex > -1);
+                            if (!frameworkVersionHasDot)
+                            {
+                                packArgs.Logger.LogWarning(string.Format(CultureInfo.CurrentCulture, Strings.MissingRequiredDot, NuGetLogCode.NU5501, alias));
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // Alias was not a valid TFM at all. Just go on as usual.
+                    }
+
+                }
+
             }
 
             InitCurrentDirectoryAndFileName(request, packArgs);
@@ -327,7 +358,6 @@ namespace NuGet.Build.Tasks.Pack
 
             return version;
         }
-
 
         private LockFile GetAssetsFile(IPackTaskRequest<IMSBuildItem> request)
         {
