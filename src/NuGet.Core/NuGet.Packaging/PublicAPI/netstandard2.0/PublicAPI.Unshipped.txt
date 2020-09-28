@@ -1,0 +1,3 @@
+NuGet.Packaging.PackageBuilder.AliasFolderNameMapping.get -> System.Collections.Generic.IDictionary<string, string>
+NuGet.Packaging.PackageBuilder.AliasFolderNameMapping.set -> void
+static NuGet.Packaging.Rules.AnalysisResources.InvalidUndottedFrameworkWarning.get -> string

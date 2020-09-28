@@ -35,6 +35,9 @@ namespace NuGet.Packaging
         /// </summary>
         public const int MaxIconFileSize = 1024 * 1024;
 
+        [Obsolete("This API is not meant to be used outside of NuGet itself.")]
+        public IDictionary<string, string> AliasFolderNameMapping { get; set; }
+
         public PackageBuilder(string path, Func<string, string> propertyProvider, bool includeEmptyDirectories)
             : this(path, propertyProvider, includeEmptyDirectories, deterministic: false)
         {
@@ -226,7 +229,7 @@ namespace NuGet.Packaging
         }
 
         /// <summary>
-        /// Exposes the additional properties extracted by the metadata 
+        /// Exposes the additional properties extracted by the metadata
         /// extractor or received from the command line.
         /// </summary>
         public Dictionary<string, string> Properties
@@ -823,7 +826,7 @@ namespace NuGet.Packaging
             Files.AddRange(searchFiles);
         }
 
-        internal static IEnumerable<PhysicalPackageFile> ResolveSearchPattern(string basePath, string searchPath, string targetPath, bool includeEmptyDirectories)
+        internal IEnumerable<PhysicalPackageFile> ResolveSearchPattern(string basePath, string searchPath, string targetPath, bool includeEmptyDirectories)
         {
             string normalizedBasePath;
             IEnumerable<PathResolver.SearchPathResult> searchResults = PathResolver.PerformWildcardSearch(basePath, searchPath, includeEmptyDirectories, out normalizedBasePath);
@@ -847,7 +850,7 @@ namespace NuGet.Packaging
         /// For recursive wildcard paths, we preserve the path portion beginning with the wildcard.
         /// For non-recursive wildcard paths, we use the file name from the actual file path on disk.
         /// </summary>
-        internal static string ResolvePackagePath(string searchDirectory, string searchPattern, string fullPath, string targetPath)
+        internal string ResolvePackagePath(string searchDirectory, string searchPattern, string fullPath, string targetPath)
         {
             string packagePath;
             bool isDirectorySearch = PathResolver.IsDirectoryPath(searchPattern);
@@ -865,13 +868,78 @@ namespace NuGet.Packaging
             {
                 // If the search does not contain wild cards, and the target path shares the same extension, copy it
                 // e.g. <file src="ie\css\style.css" target="Content\css\ie.css" /> --> Content\css\ie.css
-                return targetPath;
+                packagePath = targetPath;
+                targetPath = null;
             }
             else
             {
                 packagePath = Path.GetFileName(fullPath);
             }
-            return Path.Combine(targetPath ?? String.Empty, packagePath);
+
+            string path = Path.Combine(targetPath ?? string.Empty, packagePath);
+
+            // Translate the tfm alias to its actual framework if necessary.
+            foreach (string knownFolder in PackagingConstants.Folders.Known)
+            {
+                string folderPrefix = knownFolder + Path.DirectorySeparatorChar;
+                if (path.Length > folderPrefix.Length &&
+                    path.StartsWith(folderPrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    string frameworkPart = null;
+                    if (knownFolder == PackagingConstants.Folders.ContentFiles && path.Count(sep => sep == Path.DirectorySeparatorChar) > 2)
+                    {
+                        // ContentFiles might have an extra level of nesting for the
+                        // language, so we have to skip over _that_ in order
+                        // to get to the framework itself.
+                        var languageEndIndex = path.IndexOf(System.IO.Path.DirectorySeparatorChar, folderPrefix.Length + 1);
+                        frameworkPart = path.Substring(folderPrefix.Length + (languageEndIndex - folderPrefix.Length));
+                    }
+                    else
+                    {
+                        frameworkPart = path.Substring(folderPrefix.Length);
+                    }
+
+                    string aliasString = Path.GetDirectoryName(frameworkPart).Split(Path.DirectorySeparatorChar).First();
+
+                    if (string.IsNullOrEmpty(aliasString))
+                    {
+                        break;
+                    }
+
+                    string frameworkString = null;
+
+                    NuGetFramework framework = null;
+
+#pragma warning disable CS0618 // This API is only ever meant to be used temporarily inside NuGet itself, not outside of our SDK
+                    if (AliasFolderNameMapping != null && AliasFolderNameMapping.TryGetValue(aliasString, out frameworkString))
+#pragma warning restore CS0618
+                    {
+                        path = folderPrefix + frameworkString + Path.DirectorySeparatorChar + path.Substring(folderPrefix.Length + aliasString.Length + 1);
+                        framework = NuGetFramework.Parse(frameworkString);
+                    }
+                    else
+                    {
+                        try
+                        {
+                            framework = NuGetFramework.Parse(aliasString);
+                        }
+                        catch
+                        {
+                        }
+                    }
+
+
+                    if (framework != null && framework.HasPlatform && framework.PlatformVersion == FrameworkConstants.EmptyVersion)
+                    {
+                        throw new PackagingException(NuGetLogCode.NU1012, string.Format(CultureInfo.CurrentCulture, NuGetResources.InvalidPlatformVersion, aliasString));
+                    }
+
+
+                    break;
+                }
+            }
+
+            return path;
         }
 
         /// <summary>

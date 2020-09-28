@@ -80,6 +80,10 @@ namespace NuGet.Commands
             Files.Clear();
             builder.Files.Clear();
 
+#pragma warning disable CS0618 // This API is not meant to be used outside the NuGet SDK.
+            builder.AliasFolderNameMapping = PackArgs.AliasFolderNameMapping;
+#pragma warning restore CS0618
+
             AddOutputFiles(builder);
 
             // Add content files if there are any. They could come from a project or nuspec file

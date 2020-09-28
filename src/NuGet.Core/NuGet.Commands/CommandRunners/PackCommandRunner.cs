@@ -318,6 +318,13 @@ namespace NuGet.Commands
                 builder.MinClientVersion = _packArgs.MinClientVersion;
             }
 
+            if (_packArgs.AliasFolderNameMapping != null)
+            {
+#pragma warning disable CS0618 // This API is not meant to be used outside of the NuGet SDK.
+                builder.AliasFolderNameMapping = _packArgs.AliasFolderNameMapping;
+#pragma warning restore CS0618
+            }
+
             CheckForUnsupportedFrameworks(builder);
 
             ExcludeFiles(builder.Files);
@@ -992,7 +999,7 @@ namespace NuGet.Commands
         private bool BuildSymbolsPackage(string path)
         {
             PackageBuilder symbolsBuilder = CreatePackageBuilderFromNuspec(path);
-            if (_packArgs.SymbolPackageFormat == SymbolPackageFormat.Snupkg) // Snupkgs can only have 1 PackageType. 
+            if (_packArgs.SymbolPackageFormat == SymbolPackageFormat.Snupkg) // Snupkgs can only have 1 PackageType.
             {
                 symbolsBuilder.PackageTypes.Clear();
                 symbolsBuilder.PackageTypes.Add(PackageType.SymbolsPackage);
