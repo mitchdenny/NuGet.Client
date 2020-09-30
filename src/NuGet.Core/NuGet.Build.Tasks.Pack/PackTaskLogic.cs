@@ -63,8 +63,10 @@ namespace NuGet.Build.Tasks.Pack
                 NuGetFramework framework = targetFramework.FrameworkName;
                 aliases[alias] = framework.GetShortFolderName();
 
-                var isNet5EraTfm = framework.Version.Major >= 5 && StringComparer.OrdinalIgnoreCase.Equals(FrameworkConstants.FrameworkIdentifiers.NetCoreApp, framework.Framework);
-                if (isNet5EraTfm)
+                if (
+                    framework.Version.Major >= 5 &&
+                    StringComparer.OrdinalIgnoreCase.Equals(FrameworkConstants.FrameworkIdentifiers.NetCoreApp, framework.Framework)
+                )
                 {
                     try
                     {
