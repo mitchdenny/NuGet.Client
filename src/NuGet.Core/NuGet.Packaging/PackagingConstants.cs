@@ -45,17 +45,6 @@ namespace NuGet.Packaging
                 Analyzers,
                 Source
             };
-
-            internal static IReadOnlyList<string> SupportFrameworks { get; } = new string[] {
-                Build,
-                BuildCrossTargeting,
-                BuildTransitive,
-                Tools,
-                ContentFiles,
-                Lib,
-                Runtimes,
-                Ref,
-            };
         }
 
         /// <summary>
